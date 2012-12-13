@@ -3,42 +3,30 @@
   'use strict';
 
   var test = require('tap').test;
-  var http = require('http');
-  var net = require('net');
   var duplicator = require('../');
+  var helloServer = require('./servers/hello');
+  var sinkServer = require('./servers/sink');
+  var helloClient = require('./clients/hello');
 
   function randomPort() {
     return Math.floor(Math.random() * (Math.pow(2,16) - 1e4) + 1e4);
   }
 
-  function makeServer(connect, fn) {
-    var server = http.createServer(fn);
-    server.port = randomPort();
-    server.listen(server.port, connect);
-    return server;
-  }
-
   test('duplicator', function (t) {
 
-    var origin = makeServer(onConnect, function (req, res) {
-      // delay origin response so sink has a chance to interfere
-      res.statusCode = 201;
-      res.setHeader('content-type', 'text/plain');
-      res.end('hello world');
-    });
+    var origin = helloServer('hello world');
+    origin.port = randomPort();
+    origin.listen(origin.port, onConnect);
 
-    var log = [];
-    var sink = makeServer(onConnect, function (req, res) {
-      log.push(req.url);
-      res.statusCode = 404;
-      res.setHeader('content-type', 'text/html');
-      res.end('PAY NO ATTENTION TO ME');
-    });
+    var sink = sinkServer();
+    sink.port = randomPort();
+    sink.listen(sink.port, onConnect);
 
     var proxy = duplicator(function(connection, forward, duplicate) {
-      forward('0.0.0.0:' + origin.port);
-      duplicate('0.0.0.0:' + sink.port);
+      forward('0.0.0.0' + origin.port);
+      duplicate('0.0.0.0' + sink.port);
     });
+
     proxy.listen(proxy.port = randomPort(), onConnect);
 
     var servers = [origin, sink, proxy];
@@ -50,33 +38,24 @@
         return;
       }
 
-      var opts = {
-        method : 'GET',
-        host : 'localhost',
-        port : proxy.port,
-        path : '/beep'
-      };
+      var client = helloClient(proxy.port);
+      client.on('done', function(res) {
 
-      var req = http.request(opts, function (res) {
-        t.equal(res.statusCode, 201, "got status code from origin");
+        // Check the result is right
+        t.equal(res.statusCode, 200, "got status code from origin");
         t.equal(res.headers['content-type'], 'text/plain', "got content-type from origin");
+        t.equal(res.body, 'hello world', "got body from origin");
 
-        var buffer = '';
-        res.on('data', function(data) {
-          buffer += data;
-        });
+        // Check that the sink got the message
+        t.equal(sink.log.length, 1, "sink intercepted a message");
+        t.equal(sink.log[0], '/hello', "sink got the right message");
 
-        res.on('end', function () {
-          t.equal(buffer, 'hello world', "got body from origin");
-          t.equal(log.length, 1, "sink intercepted a message");
-          t.equal(log[0], '/beep', "sink got the right message");
-          servers.forEach(function(server){
-            server.close();
-          });
-          t.end();
+        // Kill the servers
+        servers.forEach(function(server){
+          server.close();
         });
+        t.end();
       });
-      req.end();
     }
   });
 
