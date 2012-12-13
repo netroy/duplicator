@@ -36,9 +36,7 @@
     }
   }
 
-  if(cluster.isMaster) {
-
-    var argv = require('optimist').usage('Usage: $0 [-hv] -p port -f host:port [-d host:port] [-r int]')
+  var argv = require('optimist').usage('Usage: $0 [-hv] -p port -f host:port [-d host:port] [-r int]')
     .options('h', {
       'alias': 'help',
       'describe': 'show usage information'
@@ -66,10 +64,10 @@
       'default': 1
     }).check(checkArgs).argv;
 
-    require('./worker').init(argv);
+  if(cluster.isMaster) {
+    require('./master').init(argv);
   } else {
-
-    // require('./worker').init();
+    require('./worker').init(argv);
   }
 
 }).call();
