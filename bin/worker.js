@@ -7,7 +7,7 @@
   var log = module.parent.log;
   // log = console.log.bind(console, '[Worker]'.green);
 
-  function onMessage(argv) {
+  function init(argv) {
 
     log('worker started with pid', process.pid);
 
@@ -22,10 +22,6 @@
       }
     });
     server.listen(argv.p);
-  }
-
-  function init() {
-    process.on('message', onMessage);
   }
 
   module.exports = {

@@ -10,7 +10,8 @@
     "setTimeout",
     "escape",
     "unescape",
-    "__dirname"
+    "__dirname",
+    "__filename"
   ],
 
   // ES5 Strict mode on

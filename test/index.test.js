@@ -1,74 +1,83 @@
-var test = require('tap').test
-  , http = require('http')
-  , net = require('net')
-  , duplicator = require('../')
+(function() {
 
-function randomPort() {
-  return Math.floor(Math.random() * (Math.pow(2,16) - 1e4) + 1e4)
-}
+  'use strict';
 
-function makeServer(connect, fn) {
-  var server = http.createServer(fn)
-  server.port = randomPort()
-  server.listen(server.port, connect)
-  return server
-}
+  var test = require('tap').test;
+  var http = require('http');
+  var net = require('net');
+  var duplicator = require('../');
 
-test('duplicator', function (t) {
-
-  var origin = makeServer(onConnect, function (req, res) {
-    // delay origin response so sink has a chance to interfere
-    res.statusCode = 201
-    res.setHeader('content-type', 'text/plain')
-    res.end('hello world')
-  })
-
-  var log = []
-  var sink = makeServer(onConnect, function (req, res) {
-    log.push(req.url)
-    res.statusCode = 404
-    res.setHeader('content-type', 'text/html')
-    res.end('PAY NO ATTENTION TO ME')
-  })
-
-  var proxy = duplicator(function(connection, forward, duplicate) {
-    forward(origin.port)
-    duplicate(sink.port)
-  })
-  proxy.listen(proxy.port = randomPort(), onConnect)
-
-  var servers = [origin, sink, proxy]
-  var connected = 0
-
-  function onConnect () {
-    if (++connected < servers.length) return
-
-    var opts = {
-      method : 'GET',
-      host : 'localhost',
-      port : proxy.port,
-      path : '/beep'
-    }
-
-    var req = http.request(opts, function (res) {
-      t.equal(res.statusCode, 201, "got status code from origin")
-      t.equal(res.headers['content-type'], 'text/plain', "got content-type from origin")
-
-      var buffer = ''
-      res.on('data', function(data) {
-        buffer += data
-      })
-
-      res.on('end', function () {
-        t.equal(buffer, 'hello world', "got body from origin")
-        t.equal(log.length, 1, "sink intercepted a message")
-        t.equal(log[0], '/beep', "sink got the right message")
-        servers.forEach(function(server){
-          server.close()
-        })
-        t.end()
-      })
-    })
-    req.end()
+  function randomPort() {
+    return Math.floor(Math.random() * (Math.pow(2,16) - 1e4) + 1e4);
   }
-})
+
+  function makeServer(connect, fn) {
+    var server = http.createServer(fn);
+    server.port = randomPort();
+    server.listen(server.port, connect);
+    return server;
+  }
+
+  test('duplicator', function (t) {
+
+    var origin = makeServer(onConnect, function (req, res) {
+      // delay origin response so sink has a chance to interfere
+      res.statusCode = 201;
+      res.setHeader('content-type', 'text/plain');
+      res.end('hello world');
+    });
+
+    var log = [];
+    var sink = makeServer(onConnect, function (req, res) {
+      log.push(req.url);
+      res.statusCode = 404;
+      res.setHeader('content-type', 'text/html');
+      res.end('PAY NO ATTENTION TO ME');
+    });
+
+    var proxy = duplicator(function(connection, forward, duplicate) {
+      forward('0.0.0.0:' + origin.port);
+      duplicate('0.0.0.0:' + sink.port);
+    });
+    proxy.listen(proxy.port = randomPort(), onConnect);
+
+    var servers = [origin, sink, proxy];
+    var connected = 0;
+
+    function onConnect () {
+
+      if (++connected < servers.length) {
+        return;
+      }
+
+      var opts = {
+        method : 'GET',
+        host : 'localhost',
+        port : proxy.port,
+        path : '/beep'
+      };
+
+      var req = http.request(opts, function (res) {
+        t.equal(res.statusCode, 201, "got status code from origin");
+        t.equal(res.headers['content-type'], 'text/plain', "got content-type from origin");
+
+        var buffer = '';
+        res.on('data', function(data) {
+          buffer += data;
+        });
+
+        res.on('end', function () {
+          t.equal(buffer, 'hello world', "got body from origin");
+          t.equal(log.length, 1, "sink intercepted a message");
+          t.equal(log[0], '/beep', "sink got the right message");
+          servers.forEach(function(server){
+            server.close();
+          });
+          t.end();
+        });
+      });
+      req.end();
+    }
+  });
+
+}).call();

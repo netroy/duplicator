@@ -5,17 +5,71 @@
   "use strict";
 
   var cluster = require('cluster');
+  var duplicator = require('../');
 
   var logLabel = '[Cluster]';
   try {
     require('colors');
     logLabel = logLabel.blue;
-  }catch(e) {}
+  } catch(e) {}
 
   var log = module.log = console.log.bind(console, logLabel);
 
-  // Spawn worker or master
-  var requiredModule = cluster.isMaster ? './master' : './worker';
-  require(requiredModule).init();
+
+  function checkArgs(argv){
+
+    if (argv.h) {
+      throw '';
+    }
+
+    if (argv.v) {
+      log(duplicator.version);
+      process.exit();
+    }
+
+    if (!argv.p) {
+      throw new Error('You must specify a port, either via the -p option or in the PORT environment variable');
+    }
+
+    if (!argv.f) {
+      throw new Error('You must specify a host to forward to with -f option');
+    }
+  }
+
+  if(cluster.isMaster) {
+
+    var argv = require('optimist').usage('Usage: $0 [-hv] -p port -f host:port [-d host:port] [-r int]')
+    .options('h', {
+      'alias': 'help',
+      'describe': 'show usage information'
+    })
+    .options('v', {
+      'alias': 'version',
+      'describe': 'show version information'
+    })
+    .options('p', {
+      'alias': 'port',
+      'describe': 'port to listen on, defaults to PORT',
+      'default': process.env.PORT
+    })
+    .options('f', {
+      'alias': 'forward',
+      'describe': 'host to forward to'
+    })
+    .options('d', {
+      'alias': 'duplicate',
+      'describe': 'host to duplicate to'
+    })
+    .options('r', {
+      'alias': 'rate',
+      'describe': 'rate to sample traffic',
+      'default': 1
+    }).check(checkArgs).argv;
+
+    require('./worker').init(argv);
+  } else {
+
+    // require('./worker').init();
+  }
 
 }).call();
